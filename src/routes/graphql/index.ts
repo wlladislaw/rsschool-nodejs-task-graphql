@@ -15,6 +15,7 @@ import {
 import { UUIDType } from './types/uuid.js';
 import { MemberTypeId } from './types/enums.js';
 
+
 const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   const { prisma } = fastify;
 
@@ -54,7 +55,7 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   const PostType = new GraphQLObjectType({
     name: 'PostType',
     fields: () => ({
-      id: { type: new GraphQLNonNull(GraphQLString) },
+      id: { type: new GraphQLNonNull(UUIDType) },
       title: { type: new GraphQLNonNull(GraphQLString) },
       content: { type: new GraphQLNonNull(GraphQLString) },
     }),
@@ -62,15 +63,16 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   const UserType = new GraphQLObjectType({
     name: 'UserType',
     fields: () => ({
-      id: { type: new GraphQLNonNull(GraphQLString) },
+      id: { type: new GraphQLNonNull(UUIDType) },
       name: { type: new GraphQLNonNull(GraphQLString) },
       balance: { type: GraphQLFloat },
+      profile: {type: ProfileType}
     }),
   });
   const ProfileType = new GraphQLObjectType({
     name: 'ProfileType',
     fields: () => ({
-      id: { type: new GraphQLNonNull(GraphQLString) },
+      id: { type: new GraphQLNonNull(UUIDType) },
       isMale: { type: GraphQLBoolean },
       yearOfBirth: { type: GraphQLInt },
     }),
@@ -131,6 +133,7 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
             return res;
           },
         },
+       
         memberType: {
           type: MemberType,
           args: { id: { type: new GraphQLNonNull(MemberTypeId) } },
