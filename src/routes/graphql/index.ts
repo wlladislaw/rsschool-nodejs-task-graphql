@@ -15,7 +15,6 @@ import {
 import { UUIDType } from './types/uuid.js';
 import { MemberTypeId } from './types/enums.js';
 
-
 const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   const { prisma } = fastify;
 
@@ -65,16 +64,20 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
     fields: () => ({
       id: { type: new GraphQLNonNull(UUIDType) },
       name: { type: new GraphQLNonNull(GraphQLString) },
-      balance: { type: GraphQLFloat },
-      profile: {type: ProfileType}
+      balance: { type: new GraphQLNonNull(GraphQLFloat) },
+      profile: { type: ProfileType },
+      posts: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(PostType))),
+      },
     }),
   });
   const ProfileType = new GraphQLObjectType({
     name: 'ProfileType',
     fields: () => ({
       id: { type: new GraphQLNonNull(UUIDType) },
-      isMale: { type: GraphQLBoolean },
-      yearOfBirth: { type: GraphQLInt },
+      isMale: { type: new GraphQLNonNull(GraphQLBoolean) },
+      yearOfBirth: { type: new GraphQLNonNull(GraphQLInt) },
+      memberType: { type: new GraphQLNonNull(MemberType) },
     }),
   });
   const schema = new GraphQLSchema({
@@ -97,7 +100,17 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
           type: new GraphQLList(UserType),
 
           async resolve() {
-            return await prisma.user.findMany();
+            const res = await prisma.user.findMany({
+              include: {
+                profile: {
+                  include: {
+                    memberType: true,
+                  },
+                },
+                posts: true,
+              },
+            });
+            return res;
           },
         },
         profiles: {
@@ -119,8 +132,17 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
           type: UserType,
           args: { id: { type: new GraphQLNonNull(UUIDType) } },
           async resolve(_, { id }) {
-            const res = await prisma.user.findUnique({ where: { id: String(id) } });
-
+            const res = await prisma.user.findUnique({
+              where: { id: String(id) },
+              include: {
+                profile: {
+                  include: {
+                    memberType: true,
+                  },
+                },
+                posts: true,
+              },
+            });
             return res;
           },
         },
@@ -133,7 +155,7 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
             return res;
           },
         },
-       
+
         memberType: {
           type: MemberType,
           args: { id: { type: new GraphQLNonNull(MemberTypeId) } },
