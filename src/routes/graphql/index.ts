@@ -1,6 +1,24 @@
 import { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 import { createGqlResponseSchema, gqlResponseSchema } from './schemas.js';
-import { graphql } from 'graphql';
+import {
+  graphql,
+  GraphQLBoolean,
+  GraphQLFloat,
+  GraphQLInt,
+  GraphQLList,
+  GraphQLNonNull,
+  GraphQLObjectType,
+  GraphQLSchema,
+  GraphQLString,
+} from 'graphql';
+import { UUIDType } from './types/uuid.js';
+import { MemberTypeId } from './types/enums.js';
+import { User } from '@prisma/client';
+
+interface UserSubs extends User {
+  userSubscribedTo: { author: User }[];
+  subscribedToUser: { subscriber: User }[];
+}
 
 const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   const { prisma } = fastify;
@@ -15,8 +33,173 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async handler(req) {
-      // return graphql();
+   
+      return graphql({
+        schema,
+        source: req.body.query,
+        variableValues: req.body.variables,
+      });
     },
+  });
+  const MemberType = new GraphQLObjectType({
+    name: 'MemberType',
+    fields: () => ({
+      id: { type: new GraphQLNonNull(MemberTypeId) },
+      discount: { type: new GraphQLNonNull(GraphQLFloat) },
+      postsLimitPerMonth: { type: new GraphQLNonNull(GraphQLInt) },
+    }),
+  });
+  const PostType = new GraphQLObjectType({
+    name: 'PostType',
+    fields: () => ({
+      id: { type: new GraphQLNonNull(UUIDType) },
+      title: { type: new GraphQLNonNull(GraphQLString) },
+      content: { type: new GraphQLNonNull(GraphQLString) },
+    }),
+  });
+  const UserType = new GraphQLObjectType({
+    name: 'UserType',
+    fields: () => ({
+      id: { type: new GraphQLNonNull(UUIDType) },
+      name: { type: new GraphQLNonNull(GraphQLString) },
+      balance: { type: new GraphQLNonNull(GraphQLFloat) },
+      profile: { type: ProfileType },
+      posts: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(PostType))),
+      },
+      userSubscribedTo: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(UserType))),
+        resolve: (user: UserSubs): User[] => user.userSubscribedTo.map((s) => s.author),
+      },
+      subscribedToUser: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(UserType))),
+        resolve: (user: UserSubs): User[] =>
+          user.subscribedToUser.map((s) => s.subscriber),
+      },
+    }),
+  });
+  const ProfileType = new GraphQLObjectType({
+    name: 'ProfileType',
+    fields: () => ({
+      id: { type: new GraphQLNonNull(UUIDType) },
+      isMale: { type: new GraphQLNonNull(GraphQLBoolean) },
+      yearOfBirth: { type: new GraphQLNonNull(GraphQLInt) },
+      memberType: { type: new GraphQLNonNull(MemberType) },
+    }),
+  });
+  const schema = new GraphQLSchema({
+    query: new GraphQLObjectType({
+      name: 'RootQueryType',
+      fields: {
+        memberTypes: {
+          type: new GraphQLList(MemberType),
+          async resolve() {
+            return await prisma.memberType.findMany();
+          },
+        },
+        posts: {
+          type: new GraphQLList(PostType),
+          async resolve() {
+            return await prisma.post.findMany();
+          },
+        },
+        users: {
+          type: new GraphQLList(UserType),
+
+          async resolve() {
+            const res = await prisma.user.findMany({
+              include: {
+                profile: {
+                  include: {
+                    memberType: true,
+                  },
+                },
+                posts: true,
+              },
+            });
+            return res;
+          },
+        },
+        profiles: {
+          type: new GraphQLList(ProfileType),
+          async resolve() {
+            return await prisma.profile.findMany();
+          },
+        },
+        post: {
+          type: PostType,
+          args: { id: { type: new GraphQLNonNull(UUIDType) } },
+          async resolve(_, { id }) {
+            const res = await prisma.post.findUnique({ where: { id: String(id) } });
+
+            return res;
+          },
+        },
+        user: {
+          type: UserType,
+          args: { id: { type: new GraphQLNonNull(UUIDType) } },
+          async resolve(_, { id }) {
+            const res = await prisma.user.findUnique({
+              where: { id: String(id) },
+              include: {
+                profile: {
+                  include: {
+                    memberType: true,
+                  },
+                },
+                posts: true,
+                userSubscribedTo: {
+                  include: {
+                    author: {
+                      include: {
+                        subscribedToUser: {
+                          include: {
+                            subscriber: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                subscribedToUser: {
+                  include: {
+                    subscriber: {
+                      include: {
+                        userSubscribedTo: {
+                          include: {
+                            author: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            });
+            return res;
+          },
+        },
+        profile: {
+          type: ProfileType,
+          args: { id: { type: new GraphQLNonNull(UUIDType) } },
+          async resolve(_, { id }) {
+            const res = await prisma.profile.findUnique({ where: { id: String(id) } });
+
+            return res;
+          },
+        },
+
+        memberType: {
+          type: MemberType,
+          args: { id: { type: new GraphQLNonNull(MemberTypeId) } },
+          async resolve(_, { id }) {
+            const res = await prisma.memberType.findUnique({ where: { id: String(id) } });
+
+            return res;
+          },
+        },
+      },
+    }),
   });
 };
 
