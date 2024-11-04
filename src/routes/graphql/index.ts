@@ -4,7 +4,6 @@ import {
   graphql,
   GraphQLBoolean,
   GraphQLFloat,
-  GraphQLID,
   GraphQLInt,
   GraphQLList,
   GraphQLNonNull,
@@ -14,6 +13,12 @@ import {
 } from 'graphql';
 import { UUIDType } from './types/uuid.js';
 import { MemberTypeId } from './types/enums.js';
+import { User } from '@prisma/client';
+
+interface UserSubs extends User {
+  userSubscribedTo: { author: User }[];
+  subscribedToUser: { subscriber: User }[];
+}
 
 const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   const { prisma } = fastify;
@@ -28,14 +33,7 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async handler(req) {
-      // console.log(
-      //   'graphqlgraphqlgraphql',
-      //   graphql({
-      //     schema,
-      //     source: req.body.query,
-      //     variableValues: req.body.variables,
-      //   }),
-      // );
+   
       return graphql({
         schema,
         source: req.body.query,
@@ -68,6 +66,15 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
       profile: { type: ProfileType },
       posts: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(PostType))),
+      },
+      userSubscribedTo: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(UserType))),
+        resolve: (user: UserSubs): User[] => user.userSubscribedTo.map((s) => s.author),
+      },
+      subscribedToUser: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(UserType))),
+        resolve: (user: UserSubs): User[] =>
+          user.subscribedToUser.map((s) => s.subscriber),
       },
     }),
   });
@@ -141,6 +148,32 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
                   },
                 },
                 posts: true,
+                userSubscribedTo: {
+                  include: {
+                    author: {
+                      include: {
+                        subscribedToUser: {
+                          include: {
+                            subscriber: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                subscribedToUser: {
+                  include: {
+                    subscriber: {
+                      include: {
+                        userSubscribedTo: {
+                          include: {
+                            author: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
             });
             return res;
